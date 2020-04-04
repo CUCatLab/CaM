@@ -3,7 +3,6 @@ import pandas as pd
 from pandas import DataFrame as df
 import matplotlib.pyplot as plt
 import ipywidgets as widgets
-from lmfit.models import GaussianModel, LinearModel, VoigtModel, PolynomialModel
 import re
 from os import listdir
 from os.path import isfile, join
@@ -86,7 +85,7 @@ class Data :
             Spectra[i+1] = Data[Runs[i]]
             if Background != 'None' :
                 Spectra[i+1] = Spectra[i+1] - Buffer
-
+        
         plt.figure(figsize=(8,8))
         plt.xlabel('Wavelength (nm)',fontsize=16), plt.ylabel('Intensity (au)',fontsize=16)
         for i in range (Spectra.shape[0] - 1):
