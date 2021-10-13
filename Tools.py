@@ -151,22 +151,28 @@ class Data :
         IntegratedToClipboard = ipw.Button(description="Copy integrated data")
         IntegratedToClipboard.on_click(IntegratedToClipboard_Clicked)
 
-        def Update_Plot_Clicked(b):
+        def Plot_Clicked(b):
             with out :
-                clear_output(True)
+                clear_output()
                 self.Plot(self.Runs_Selected.value,Background=self.Background.value)
+            with anout :
+                clear_output()
             LowLim.max = max(self.Spectra['X'].values)
             LowLim.min = min(self.Spectra['X'].values)
             LowLim.value = min(self.Spectra['X'].values)
             UpLim.max = max(self.Spectra['X'].values)
             UpLim.min = min(self.Spectra['X'].values)
             UpLim.value = max(self.Spectra['X'].values)
-        Update_Plot = ipw.Button(description="Plot")
-        Update_Plot.on_click(Update_Plot_Clicked)
+        Plot = ipw.Button(description="Plot")
+        Plot.on_click(Plot_Clicked)
 
         def LoadData(b):
             with out :
-                clear_output(True)
+                clear_output()
+            with anout :
+                clear_output()
+            self.Background.value = 'None'
+            self.Runs_Selected.value = []
             self.Data = self.LoadData(self.FileName.value)
             Runs = self.Runs()
             self.Runs_Selected.options = Runs
@@ -177,12 +183,14 @@ class Data :
 
         def Integrate(b):
             with anout :
-                clear_output(True)
+                clear_output()
                 self.idata, self.integratedValues = self.Integrate(self.Spectra, LowLim.value, UpLim.value)
                 self.idata = pd.DataFrame(index=self.Spectra.columns)
                 plt.figure(figsize=(13,7))
-                plt.xlabel('Run'), plt.ylabel('Integrated Value')
+                plt.xlabel('Run',fontsize=16), plt.ylabel('Integrated Value',fontsize=16)
                 plt.plot(self.integratedValues, '.-')
+                plt.tick_params(axis="x", labelsize=16, rotation=-90)
+                plt.tick_params(axis="y", labelsize=16)
                 plt.show()
                 display(IntegratedToClipboard)
         button_Integrate = ipw.Button(description="Integrate")
@@ -262,10 +270,103 @@ class Data :
         display(ipw.Box([self.Filter,Update_Runs]))
         display(self.Runs_Selected)
         display(self.Background)
-        display(ipw.Box([Update_Plot,SpectraToClipboard]))
+        display(ipw.Box([Plot,SpectraToClipboard]))
         display(LowLim)
         display(UpLim)
         display(ipw.Box([button_Integrate]))
 
         display(out)
         display(anout)
+
+class Protein :
+    
+    def __init__(self) :
+        
+        pass
+    
+    def Weight(self, seq) :
+        if '{LYS(FITC)}' in seq :
+            weight = 389.38
+            seq = seq.replace('{LYS(FITC)}','')
+        else:
+            weight = 0
+        weights = {'A': 71.04, 'C': 103.01, 'D': 115.03, 'E': 129.04, 'F': 147.07,
+               'G': 57.02, 'H': 137.06, 'I': 113.08, 'K': 128.09, 'L': 113.08,
+               'M': 131.04, 'N': 114.04, 'P': 97.05, 'Q': 128.06, 'R': 156.10,
+               'S': 87.03, 'T': 101.05, 'V': 99.07, 'W': 186.08, 'Y': 163.06 }
+        weight += sum(weights[p] for p in seq)
+        return weight/1000, "kilodaltons"
+    
+    def UI(self) :
+        
+        out = ipw.Output()
+        
+        Sequence = ipw.Text(
+            value='',
+            placeholder='Paste sequence',
+            description='Sequence:',
+            layout=Layout(width='75%'),
+            disabled=False
+        )
+        
+        def Calculate(b) :
+            with out :
+                clear_output()
+                weight = self.Weight(Sequence.value)
+                print("The molecular weight of this protein is", f'{weight[0]:.2f}', weight[1])
+        button_Calculate = ipw.Button(description="Calculate")
+        button_Calculate.on_click(Calculate)
+        
+        display(ipw.Box([Sequence,button_Calculate]))
+        display(out)
+
+class Solutions :
+    
+    def __init__(self) :
+        
+        pass
+    
+    def g2Add(self, m, M=50, V=1.0) :
+        # m molecular mass in units of g/mol (Daltons)
+        # M molarity in units of micromolar
+        # V volumen in units of mL
+        M = M/1e6
+        V = V/1e3
+        m = m*1000
+        return M*V*m, 'mg'
+    
+    def UI(self) :
+        
+        out = ipw.Output()
+        
+        Volume = ipw.widgets.FloatText(
+            value=1.0,
+            description='mL:',
+            disabled=False
+        )
+        
+        Molarity = ipw.widgets.FloatText(
+            value=50.0,
+            description='μM:',
+            disabled=False
+        )
+        
+        Mass = ipw.widgets.FloatText(
+            value=2320,
+            description='g/mol:',
+            disabled=False
+        )
+        
+        def Calculate(b) :
+            with out :
+                clear_output()
+                mass = self.g2Add(Mass.value,Molarity.value,Volume.value)
+                print(f'{mass[0]:.3f}', mass[1])
+        button_Calculate = ipw.Button(description="Calculate")
+        button_Calculate.on_click(Calculate)
+        
+        display(Volume)
+        display(Molarity)
+        display(Mass)
+        display(button_Calculate)
+        display(out)
