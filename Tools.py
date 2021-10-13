@@ -2,10 +2,12 @@ import numpy as np
 import scipy
 import pandas as pd
 from pandas import DataFrame as df
+import yaml
 import matplotlib.pyplot as plt
 import ipywidgets as ipw
 from ipywidgets import Button, Layout
 from IPython.display import clear_output
+from IPython.display import display_html
 import re
 from os import listdir
 from os.path import isfile, join
@@ -278,26 +280,60 @@ class Data :
         display(out)
         display(anout)
 
-class Protein :
+class Calculations :
     
     def __init__(self) :
         
-        pass
+        with open('Molecules.yaml', 'r') as stream:
+            self.Molecules = yaml.safe_load(stream)
+        
+        Molecules = self.Molecules
+        
+        MoleculesTable = pd.DataFrame()
+        Names = list()
+        Mass = list()
+        
+        for molecule in Molecules['Proteins'] :
+            Names.append(molecule)
+            Mass.append(self.ProteinMass(Molecules['Proteins'][molecule]['Sequence'])[0])
+        
+        for molecule in Molecules['Solutes'] :
+            Names.append(molecule)
+            Mass.append(Molecules['Solutes'][molecule]['Mass'])
+        
+        MoleculesTable.index = Names
+        MoleculesTable['Mass (g/mol)'] = Mass
+        MoleculesTable['Mass (g/mol)'] = MoleculesTable['Mass (g/mol)'].round(decimals=1)
+        
+        self.MoleculesTable = MoleculesTable
     
-    def Weight(self, seq) :
+    def ProteinMass(self, seq) :
         if '{LYS(FITC)}' in seq :
-            weight = 389.38
+            mass = 389.38
             seq = seq.replace('{LYS(FITC)}','')
         else:
-            weight = 0
-        weights = {'A': 71.04, 'C': 103.01, 'D': 115.03, 'E': 129.04, 'F': 147.07,
+            mass = 0
+        masss = {'A': 71.04, 'C': 103.01, 'D': 115.03, 'E': 129.04, 'F': 147.07,
                'G': 57.02, 'H': 137.06, 'I': 113.08, 'K': 128.09, 'L': 113.08,
                'M': 131.04, 'N': 114.04, 'P': 97.05, 'Q': 128.06, 'R': 156.10,
                'S': 87.03, 'T': 101.05, 'V': 99.07, 'W': 186.08, 'Y': 163.06 }
-        weight += sum(weights[p] for p in seq)
-        return weight/1000, "kilodaltons"
+        mass += sum(masss[p] for p in seq)
+        return mass, "Daltons"
     
-    def UI(self) :
+    def MoleculesTable(self) :
+        
+        pass
+    
+    def g2Add(self, m, M=50, V=1.0) :
+        # m molecular mass in units of g/mol (Daltons)
+        # M molarity in units of micromolar
+        # V volumen in units of mL
+        M = M/1e6
+        V = V/1e3
+        m = m*1000
+        return M*V*m, 'mg'
+    
+    def MassCalculator(self) :
         
         out = ipw.Output()
         
@@ -312,61 +348,50 @@ class Protein :
         def Calculate(b) :
             with out :
                 clear_output()
-                weight = self.Weight(Sequence.value)
-                print("The molecular weight of this protein is", f'{weight[0]:.2f}', weight[1])
+                mass = self.ProteinMass(Sequence.value)
+                print("The molecular mass of this protein is", f'{mass[0]:.1f}', mass[1])
         button_Calculate = ipw.Button(description="Calculate")
         button_Calculate.on_click(Calculate)
         
         display(ipw.Box([Sequence,button_Calculate]))
         display(out)
-
-class Solutions :
     
-    def __init__(self) :
-        
-        pass
-    
-    def g2Add(self, m, M=50, V=1.0) :
-        # m molecular mass in units of g/mol (Daltons)
-        # M molarity in units of micromolar
-        # V volumen in units of mL
-        M = M/1e6
-        V = V/1e3
-        m = m*1000
-        return M*V*m, 'mg'
-    
-    def UI(self) :
+    def SolutionCalculator(self) :
         
         out = ipw.Output()
         
         Volume = ipw.widgets.FloatText(
             value=1.0,
-            description='mL:',
+            description='Volume (mL):',
+            style = {'description_width': '120px'},
             disabled=False
         )
         
         Molarity = ipw.widgets.FloatText(
             value=50.0,
-            description='μM:',
+            description='Concentration (μM):',
+            style = {'description_width': '120px'},
             disabled=False
         )
         
-        Mass = ipw.widgets.FloatText(
-            value=2320,
-            description='g/mol:',
-            disabled=False
+        Molecule = ipw.Dropdown(
+            options=self.MoleculesTable.index,
+            value=self.MoleculesTable.index[0],
+            description='Number:',
+            style = {'description_width': '120px'},
+            disabled=False,
         )
         
         def Calculate(b) :
             with out :
                 clear_output()
-                mass = self.g2Add(Mass.value,Molarity.value,Volume.value)
+                mass = self.g2Add(self.MoleculesTable['Mass (g/mol)'].loc[Molecule.value],Molarity.value,Volume.value)
                 print(f'{mass[0]:.3f}', mass[1])
         button_Calculate = ipw.Button(description="Calculate")
         button_Calculate.on_click(Calculate)
         
         display(Volume)
         display(Molarity)
-        display(Mass)
+        display(Molecule)
         display(button_Calculate)
         display(out)
