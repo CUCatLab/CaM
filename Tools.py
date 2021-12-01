@@ -9,11 +9,12 @@ from ipywidgets import Button, Layout
 from IPython.display import clear_output
 from IPython.display import display_html
 import re
+import os
 from os import listdir
 from os.path import isfile, join
-import lmfit
-from lmfit import model
-from lmfit.models import SkewedGaussianModel, GaussianModel, LinearModel, VoigtModel, PolynomialModel
+from pathlib import Path
+
+cwd = Path(os.getcwd())
 
 class Data :
     
@@ -21,19 +22,26 @@ class Data :
         
         self.BackgroundNames = ['None']
         self.Names = ['']
-    
-    def DataList(self, Path) :
-        
-        self.Path = Path
-        DataList = [f for f in listdir(self.Path) if isfile(join(self.Path, f))]
-        return DataList
+
+        cwd = Path(os.getcwd())
+
+        self.FoldersLabel = '-------Folders-------'
+        self.FilesLabel = '-------Files-------'
+
+    def get_folder_contents(self,folder):
+
+        'Gets contents of folder, sorting by folder then files, hiding hidden things'
+        folder = Path(folder)
+        folders = [item.name for item in folder.iterdir() if item.is_dir() and not item.name.startswith('.')]
+        files = [item.name for item in folder.iterdir() if item.is_file() and not item.name.startswith('.')]
+        return [self.FoldersLabel] + sorted(folders) + [self.FilesLabel] + sorted(files)
     
     def LoadData(self, File) :
         
         self.File = File
         
         try :
-            with open(self.Path+"/"+self.File) as f:
+            with open(File) as f:
                 Content = f.readlines()
             DataLength = list()
             for index in range(len(Content)):
@@ -125,12 +133,63 @@ class Data :
         
         out = ipw.Output()
         anout = ipw.Output()
+
+        def go_to_address(address):
+            address = Path(address)
+            if address.is_dir():
+                address_field.value = str(address)
+                select.unobserve(selecting, names='value')
+                select.options = self.get_folder_contents(folder=address)
+                select.observe(selecting, names='value')
+                select.value = None
+
+        def newaddress(value):
+            go_to_address(address_field.value)
+        address_field = ipw.Text(value=str(cwd),
+            layout=Layout(width='70%'),
+            style = {'width': '100px','description_width': '150px'},
+            description='Folder')
+        address_field.on_submit(newaddress)
+                
+        def selecting(value):
+            if value['new'] and value['new'] not in [self.FoldersLabel, self.FilesLabel]:
+                path = Path(address_field.value)
+                newpath = path / value['new']
+                if newpath.is_dir():
+                    go_to_address(newpath)
+                    
+                elif newpath.is_file():
+                    #some other condition
+                    pass
+        select = ipw.Select(options=self.get_folder_contents(cwd),
+            rows=10,
+            value=None,
+            layout=Layout(width='70%'),
+            style = {'width': '100px','description_width': '150px'},
+            description='Select File')
+        select.observe(selecting, names='value')
+
+        def parent(value):
+            new = Path(address_field.value).parent
+            go_to_address(new)
+        up_button = ipw.Button(description='Up',layout=Layout(width='10%'))
+        up_button.on_click(parent)
             
-        def UpdateFileList(b) :
-            self.FolderPath.value = self.FolderPath.value.replace('\\','/')
-            self.FileName.options = self.DataList(self.FolderPath.value)
-        button_UpdateFileList = ipw.Button(description="Update")
-        button_UpdateFileList.on_click(UpdateFileList)
+        def load(b):
+            self.filepath = address_field.value + '\\' +select.value
+            with out :
+                clear_output()
+            with anout :
+                clear_output()
+            self.Background.value = 'None'
+            self.Runs_Selected.value = []
+            self.Data = self.LoadData(self.filepath)
+            Runs = self.Runs()
+            self.Runs_Selected.options = Runs
+            Runs.insert(0,'None')
+            self.Background.options = Runs
+        load_button = ipw.Button(description='Load',layout=Layout(width='10%'))
+        load_button.on_click(load)
 
         def Update_Runs_Clicked(b):
             Runs = self.Runs()
@@ -168,21 +227,6 @@ class Data :
         Plot = ipw.Button(description="Plot")
         Plot.on_click(Plot_Clicked)
 
-        def LoadData(b):
-            with out :
-                clear_output()
-            with anout :
-                clear_output()
-            self.Background.value = 'None'
-            self.Runs_Selected.value = []
-            self.Data = self.LoadData(self.FileName.value)
-            Runs = self.Runs()
-            self.Runs_Selected.options = Runs
-            Runs.insert(0,'None')
-            self.Background.options = Runs
-        button_LoadData = ipw.Button(description="Load data")
-        button_LoadData.on_click(LoadData)
-
         def Integrate(b):
             with anout :
                 clear_output()
@@ -197,23 +241,6 @@ class Data :
                 display(IntegratedToClipboard)
         button_Integrate = ipw.Button(description="Integrate")
         button_Integrate.on_click(Integrate)
-
-        self.FolderPath = ipw.Text(
-            value='../',
-            placeholder='Type file path',
-            description='Folder',
-            layout=Layout(width='80%'),
-            style = {'description_width': '150px'},
-            disabled=False
-        )
-
-        self.FileName = ipw.Dropdown(
-            options=self.DataList(self.FolderPath.value),
-            description='File',
-            layout=Layout(width='80%'),
-            style = {'description_width': '150px'},
-            disabled=False,
-        )
 
         self.Filter = ipw.Text(
             value='',
@@ -267,8 +294,8 @@ class Data :
             readout_format='d'
             )
 
-        display(ipw.Box([self.FolderPath,button_UpdateFileList]))
-        display(ipw.Box([self.FileName,button_LoadData]))
+        display(ipw.HBox([address_field,up_button]))
+        display(ipw.HBox([select,load_button]))
         display(ipw.Box([self.Filter,Update_Runs]))
         display(self.Runs_Selected)
         display(self.Background)
@@ -395,3 +422,23 @@ class Calculations :
         display(Molecule)
         display(button_Calculate)
         display(out)
+
+# class FileLoader :
+    
+#     def __init__(self) :
+
+#         cwd = Path(os.getcwd())
+
+#         self.FoldersLabel = '-------Folders-------'
+#         self.FilesLabel = '-------Files-------'
+
+#     def get_folder_contents(self,folder):
+#         'Gets contents of folder, sorting by folder then files, hiding hidden things'
+#         folder = Path(folder)
+#         folders = [item.name for item in folder.iterdir() if item.is_dir() and not item.name.startswith('.')]
+#         files = [item.name for item in folder.iterdir() if item.is_file() and not item.name.startswith('.')]
+#         return [self.FoldersLabel] + sorted(folders) + [self.FilesLabel] + sorted(files)
+
+#     def UI(self):
+
+        
