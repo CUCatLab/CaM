@@ -14,8 +14,6 @@ from os import listdir
 from os.path import isfile, join
 from pathlib import Path
 
-cwd = Path(os.getcwd())
-
 class Data :
     
     def __init__(self) :
