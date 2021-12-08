@@ -21,7 +21,7 @@ class Data :
         self.BackgroundNames = ['None']
         self.Names = ['']
 
-        cwd = Path(os.getcwd())
+        self.cwd = Path(os.getcwd())
 
         self.FoldersLabel = '-------Folders-------'
         self.FilesLabel = '-------Files-------'
@@ -143,7 +143,7 @@ class Data :
 
         def newaddress(value):
             go_to_address(address_field.value)
-        address_field = ipw.Text(value=str(cwd),
+        address_field = ipw.Text(value=str(self.cwd),
             layout=Layout(width='70%'),
             style = {'width': '100px','description_width': '150px'},
             description='Folder')
@@ -159,7 +159,7 @@ class Data :
                 elif newpath.is_file():
                     #some other condition
                     pass
-        select = ipw.Select(options=self.get_folder_contents(cwd),
+        select = ipw.Select(options=self.get_folder_contents(self.cwd),
             rows=10,
             value=None,
             layout=Layout(width='70%'),
