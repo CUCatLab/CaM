@@ -174,7 +174,7 @@ class Data :
         up_button.on_click(parent)
             
         def load(b):
-            self.filepath = address_field.value + '\\' +select.value
+            self.filepath = address_field.value + '/' +select.value
             with out :
                 clear_output()
             with anout :
