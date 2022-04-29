@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+from scipy import integrate
 import pandas as pd
 from pandas import DataFrame as df
 import yaml
@@ -8,13 +9,13 @@ import ipywidgets as ipw
 from ipywidgets import Button, Layout
 from IPython.display import clear_output
 from IPython.display import display_html
-import re
 import os
 from os import listdir
 from os.path import isfile, join
 from pathlib import Path
+import csv
 
-class Data :
+class Fluorescence :
     
     def __init__(self) :
         
@@ -32,14 +33,16 @@ class Data :
         folder = Path(folder)
         folders = [item.name for item in folder.iterdir() if item.is_dir() and not item.name.startswith('.')]
         files = [item.name for item in folder.iterdir() if item.is_file() and not item.name.startswith('.')]
-        return [self.FoldersLabel] + sorted(folders) + [self.FilesLabel] + sorted(files)
+        return sorted(folders), sorted(files)
     
-    def LoadData(self, File) :
+    def LoadData(self,folder,file) :
         
-        self.File = File
+        self.filename = file
+        self.foldername = folder
+        self.filepath = folder + '/' + file
         
         try :
-            with open(File) as f:
+            with open(self.filepath) as f:
                 Content = f.readlines()
             DataLength = list()
             for index in range(len(Content)):
@@ -91,7 +94,7 @@ class Data :
             Buffer = Data[Background]
         if Labels == '' :
             Labels = Runs
-            
+        
         Spectra = np.zeros((len(Runs)+1,len(Data[Data.columns[0]])))
         Spectra[0] = Data[Data.columns[0]]
         i = 0
@@ -100,20 +103,22 @@ class Data :
             if Background != 'None' :
                 Spectra[i+1] = Spectra[i+1] - Buffer
         
-        plt.figure(figsize=(8,8))
-        plt.xlabel('Wavelength (nm)',fontsize=16), plt.ylabel('Intensity (au)',fontsize=16)
+        fontsize = 20
+        fig, ax = plt.subplots(figsize=(10,8))
         for i in range (Spectra.shape[0] - 1):
             plt.plot(Spectra[0],Spectra[i+1],label=Labels[i])
-        plt.legend(frameon=False, loc='upper center', bbox_to_anchor=(1.5, 1), ncol=1, fontsize=16)
-        plt.title(Title, fontsize=16)
-        plt.tick_params(axis="x", labelsize=16)
-        plt.tick_params(axis="y", labelsize=16)
+        plt.legend(frameon=False, loc='upper center', bbox_to_anchor=(1.5, 1), ncol=1, fontsize=fontsize)
+        plt.xlabel('Wavelength (nm)',fontsize=fontsize), plt.ylabel('Intensity (au)',fontsize=fontsize)
+        plt.title(Title, fontsize=fontsize)
+        ax.tick_params(axis='both',which='both',labelsize=fontsize,direction="in")
+        ax.minorticks_on()
         plt.show()
         
         Header = list(Runs)
         Header.insert(0,'X')
         
         self.Spectra = pd.DataFrame(data=np.transpose(Spectra),columns=Header)
+        self.fig = fig
     
     def Integrate(self, data, xmin, xmax):
         mask = data['X'].isin(range(xmin, xmax+1))
@@ -123,7 +128,7 @@ class Data :
             if idx > 0 :
                 x = idata['X'].values
                 y = idata[column].values
-                integratedValues.append(scipy.integrate.trapz(y,x=x))
+                integratedValues.append(integrate.trapz(y,x=x))
         integratedValues = pd.DataFrame(data=integratedValues,index=self.Spectra.columns[1:],columns=['Integrated'])
         return idata, integratedValues
 
@@ -136,36 +141,46 @@ class Data :
             address = Path(address)
             if address.is_dir():
                 address_field.value = str(address)
-                select.unobserve(selecting, names='value')
-                select.options = self.get_folder_contents(folder=address)
-                select.observe(selecting, names='value')
-                select.value = None
+                SelectFolder.unobserve(selecting, names='value')
+                SelectFolder.options = self.get_folder_contents(folder=address)[0]
+                SelectFolder.observe(selecting, names='value')
+                SelectFolder.value = None
+                SelectFile.options = self.get_folder_contents(folder=address)[1]
 
         def newaddress(value):
             go_to_address(address_field.value)
         address_field = ipw.Text(value=str(self.cwd),
             layout=Layout(width='70%'),
             style = {'width': '100px','description_width': '150px'},
-            description='Folder')
+            description='Current Folder')
         address_field.on_submit(newaddress)
                 
-        def selecting(value):
-            if value['new'] and value['new'] not in [self.FoldersLabel, self.FilesLabel]:
+        def selecting(value) :
+            if value['new'] and value['new'] not in [self.FoldersLabel, self.FilesLabel] :
                 path = Path(address_field.value)
                 newpath = path / value['new']
                 if newpath.is_dir():
                     go_to_address(newpath)
-                    
                 elif newpath.is_file():
                     #some other condition
                     pass
-        select = ipw.Select(options=self.get_folder_contents(self.cwd),
-            rows=10,
+        
+        SelectFolder = ipw.Select(
+            options=self.get_folder_contents(self.cwd)[0],
+            rows=5,
             value=None,
             layout=Layout(width='70%'),
             style = {'width': '100px','description_width': '150px'},
-            description='Select File')
-        select.observe(selecting, names='value')
+            description='Subfolders')
+        SelectFolder.observe(selecting, names='value')
+        
+        SelectFile = ipw.Select(
+            options=self.get_folder_contents(self.cwd)[1],
+            rows=10,
+            values=None,
+            layout=Layout(width='70%'),
+            style = {'width': '100px','description_width': '150px'},
+            description='Files')
 
         def parent(value):
             new = Path(address_field.value).parent
@@ -174,14 +189,13 @@ class Data :
         up_button.on_click(parent)
             
         def load(b):
-            self.filepath = address_field.value + '/' +select.value
             with out :
                 clear_output()
             with anout :
                 clear_output()
             self.Background.value = 'None'
             self.Runs_Selected.value = []
-            self.Data = self.LoadData(self.filepath)
+            self.LoadData(address_field.value,SelectFile.value)
             Runs = self.Runs()
             self.Runs_Selected.options = Runs
             Runs.insert(0,'None')
@@ -201,7 +215,7 @@ class Data :
         def SpectraToClipboard_Clicked(b):
             DataToSave = self.Spectra
             DataToSave.to_clipboard()
-        SpectraToClipboard = ipw.Button(description="Copy plot data")
+        SpectraToClipboard = ipw.Button(description="Copy Plot Data")
         SpectraToClipboard.on_click(SpectraToClipboard_Clicked)
         
         def IntegratedToClipboard_Clicked(b):
@@ -240,6 +254,11 @@ class Data :
         button_Integrate = ipw.Button(description="Integrate")
         button_Integrate.on_click(Integrate)
 
+        def SavePlot_Clicked(b):
+            self.fig.savefig(self.filename.replace('.txt','.jpg'),bbox_inches='tight')
+        SavePlot = ipw.Button(description="Save Plot")
+        SavePlot.on_click(SavePlot_Clicked)
+
         self.Filter = ipw.Text(
             value='',
             placeholder='Type something',
@@ -252,7 +271,7 @@ class Data :
             options=self.BackgroundNames,
             value='None',
             layout=Layout(width='80%'),
-            description='Select background run',
+            description='Background Run',
             style = {'description_width': '150px'},
             disabled=False,
         )
@@ -262,7 +281,7 @@ class Data :
             style = {'width': '100px','description_width': '150px'},
             rows=20,
             layout=Layout(width='80%'),
-            description='Select runs',
+            description='Runs',
             disabled=False
         )
         
@@ -292,18 +311,190 @@ class Data :
             readout_format='d'
             )
 
-        display(ipw.HBox([address_field,up_button]))
-        display(ipw.HBox([select,load_button]))
+        display(ipw.HBox([address_field]))
+        display(ipw.HBox([SelectFolder,up_button]))
+        display(ipw.HBox([SelectFile,load_button]))
         display(ipw.Box([self.Filter,Update_Runs]))
         display(self.Runs_Selected)
         display(self.Background)
         display(ipw.Box([Plot,SpectraToClipboard]))
         display(LowLim)
         display(UpLim)
-        display(ipw.Box([button_Integrate]))
+        display(ipw.Box([button_Integrate,SavePlot]))
 
         display(out)
         display(anout)
+
+
+class CD :
+    
+    def __init__(self) :
+        
+        self.BackgroundNames = ['None']
+        self.Names = ['']
+
+        self.cwd = Path(os.getcwd())
+
+        self.FoldersLabel = '-------Folders-------'
+        self.FilesLabel = '-------Files-------'
+
+    def get_folder_contents(self,folder):
+
+        'Gets contents of folder, sorting by folder then files, hiding hidden things'
+        folder = Path(folder)
+        folders = [item.name for item in folder.iterdir() if item.is_dir() and not item.name.startswith('.')]
+        files = [item.name for item in folder.iterdir() if item.is_file() and not item.name.startswith('.')]
+        return sorted(folders), sorted(files)
+    
+    def LoadData(self,folder,files) :
+        
+        self.files = files
+        self.folder = folder
+        self.Data = list()
+
+        try :
+            for file in files :
+                filepath = folder + '/' + file
+                with open(filepath) as f:
+                    Content = f.readlines()
+                    Start = Content.index('XYDATA\n') + 1
+                    End = Content.index('##### Extended Information\n') - 1
+                    Content = Content[Start:End]
+                    reader = csv.reader(Content)
+                    df = pd.DataFrame(reader)
+                    df = df.astype('float')
+                    header = list()
+                    for i in range(df.shape[1]) :
+                        if i == 0 :
+                            header.append('x')
+                        else :
+                            header.append('y'+str(i))
+                    df.columns = header
+                    self.Data.append(df)
+        except :
+            pass
+        
+        return self.Data
+    
+    def Plot(self,Data,Channel=1,Labels='',Title='') :
+        
+        Spectra=pd.DataFrame()
+        fontsize = 20
+        fig, ax = plt.subplots(figsize=(10,8))
+        for i in range(len(Data)) :
+            ylabel = Data[i].columns[Channel]
+            if Labels == '' :
+                Label = self.files[i]
+            else:
+                Label = Label[i]
+            plt.plot(Data[i]['x'],Data[i][ylabel],label=Label)
+            if i == 0 :
+                Spectra['x'] = Data[i]['x']
+            Spectra[Label] = Data[i][ylabel]
+        plt.legend(frameon=False, loc='upper center', bbox_to_anchor=(1.5, 1), ncol=1, fontsize=fontsize)
+        plt.xlabel('Wavelength (nm)',fontsize=fontsize), plt.ylabel('Intensity (au)',fontsize=fontsize)
+        plt.title(Title, fontsize=fontsize)
+        ax.tick_params(axis='both',which='both',labelsize=fontsize,direction="in")
+        ax.minorticks_on()
+        plt.show()
+        
+        self.Spectra = Spectra
+        self.fig = fig
+
+    def UI(self) :
+        
+        out = ipw.Output()
+        anout = ipw.Output()
+
+        def go_to_address(address):
+            address = Path(address)
+            if address.is_dir():
+                address_field.value = str(address)
+                SelectFolder.unobserve(selecting, names='value')
+                SelectFolder.options = self.get_folder_contents(folder=address)[0]
+                SelectFolder.observe(selecting, names='value')
+                SelectFolder.value = None
+                SelectFiles.options = self.get_folder_contents(folder=address)[1]
+
+        def newaddress(value):
+            go_to_address(address_field.value)
+        address_field = ipw.Text(value=str(self.cwd),
+            layout=Layout(width='70%'),
+            style = {'width': '100px','description_width': '150px'},
+            description='Current Folder')
+        address_field.on_submit(newaddress)
+                
+        def selecting(value) :
+            if value['new'] and value['new'] not in [self.FoldersLabel, self.FilesLabel] :
+                path = Path(address_field.value)
+                newpath = path / value['new']
+                if newpath.is_dir():
+                    go_to_address(newpath)
+                elif newpath.is_file():
+                    #some other condition
+                    pass
+        
+        SelectFolder = ipw.Select(
+            options=self.get_folder_contents(self.cwd)[0],
+            rows=5,
+            value=None,
+            layout=Layout(width='70%'),
+            style = {'width': '100px','description_width': '150px'},
+            description='Subfolders')
+        SelectFolder.observe(selecting, names='value')
+        
+        SelectFiles = ipw.SelectMultiple(
+            options=self.get_folder_contents(self.cwd)[1],
+            rows=10,
+            values=None,
+            layout=Layout(width='70%'),
+            style = {'width': '100px','description_width': '150px'},
+            description='Files')
+
+        def parent(value):
+            newpath = Path(address_field.value).parent
+            go_to_address(newpath)
+            SelectFiles.options = self.get_folder_contents(newpath)[1]
+        up_button = ipw.Button(description='Up',layout=Layout(width='10%'))
+        up_button.on_click(parent)
+            
+        def load(b):
+            with out :
+                clear_output()
+            with anout :
+                clear_output()
+            self.LoadData(address_field.value,SelectFiles.value)
+            with out :
+                clear_output()
+                self.Plot(self.Data,Channel=Channel.value)
+                display(Plot2Clipboard)
+            with anout :
+                clear_output()
+        load_button = ipw.Button(description='Load',layout=Layout(width='10%'))
+        load_button.on_click(load)
+
+        Channel = ipw.IntText(
+            value=1,
+            description='Channel:',
+            layout=Layout(width='15%'),
+            style = {'width': '100px','description_width': '150px'},
+            disabled=False
+        )
+
+        def Pot2Clipboard_Clicked(b):
+            DataToSave = self.Spectra
+            DataToSave.to_clipboard()
+        Plot2Clipboard = ipw.Button(description="Copy Spectra")
+        Plot2Clipboard.on_click(Pot2Clipboard_Clicked)
+
+        display(ipw.HBox([address_field]))
+        display(ipw.HBox([SelectFolder,up_button]))
+        display(ipw.HBox([SelectFiles,load_button]))
+        display(Channel)
+
+        display(out)
+        display(anout)
+
 
 class Calculations :
     
