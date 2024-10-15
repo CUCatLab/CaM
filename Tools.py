@@ -128,7 +128,7 @@ class Fluorescence :
             if idx > 0 :
                 x = idata['X'].values
                 y = idata[column].values
-                integratedValues.append(integrate.trapz(y,x=x))
+                integratedValues.append(integrate.trapezoid(y,x=x))
         integratedValues = pd.DataFrame(data=integratedValues,index=self.Spectra.columns[1:],columns=['Integrated'])
         return idata, integratedValues
 
