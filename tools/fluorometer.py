@@ -197,22 +197,22 @@ class UI :
             self.Runs_Selected.value = []
             self.data = dt.loadData(folderField.value,SelectFile.value)
             self.filename = SelectFile.value
-            Runs = list(self.data.columns.values)
-            Runs.remove(Runs[0])
-            self.Runs_Selected.options = Runs
-            Runs.insert(0,'None')
-            self.Background.options = Runs
+            RunList()
         load_button = ipw.Button(description='Load',layout=Layout(width='10%'))
         load_button.on_click(load)
 
-        def Update_Runs_Clicked(b):
-            Runs = self.Runs()
-            Runs = [k for k in Runs if self.Filter.value in k]
+        def RunList():
+            self.Runs = list(self.data.columns.values)
+            self.Runs.remove(self.Runs[0])
+            Runs = [k for k in self.Runs if self.Filter.value in k]
             self.Runs_Selected.options = Runs
             Runs.insert(0,'None')
             self.Background.options = Runs
-        Update_Runs = ipw.Button(description="Update run list")
-        Update_Runs.on_click(Update_Runs_Clicked)
+        
+        def Update_RunList_Clicked(b):
+            RunList()
+        Update_RunList = ipw.Button(description="Update run list")
+        Update_RunList.on_click(Update_RunList_Clicked)
 
         def SpectraToClipboard_Clicked(b):
             DataToSave = self.Spectra
@@ -316,7 +316,7 @@ class UI :
         display(ipw.HBox([folderField]))
         display(ipw.HBox([SelectFolder,up_button]))
         display(ipw.HBox([SelectFile,load_button]))
-        display(ipw.Box([self.Filter,Update_Runs]))
+        display(ipw.Box([self.Filter,Update_RunList]))
         display(self.Runs_Selected)
         display(self.Background)
         display(ipw.Box([Plot,SpectraToClipboard]))
