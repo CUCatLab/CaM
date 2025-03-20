@@ -16,7 +16,7 @@ from pathlib import Path
 import csv
 
 
-parametersFile = 'tools/parameters.yaml'
+settingsFile = 'tools/settings.yaml'
 
 class dataTools :
 
@@ -77,9 +77,9 @@ class dataTools :
         
         if CamCorrection :
             
-            with open(parametersFile, 'r') as stream :
-                par = yaml.safe_load(stream)
-            file_path = par['files']['calmodulin']
+            with open(settingsFile, 'r') as stream :
+                settings = yaml.safe_load(stream)
+            file_path = settings['files']['calmodulin']
             try:
                 with open(file_path, 'r'):
                     Cam = pd.read_csv(file_path)
@@ -145,13 +145,13 @@ class UI :
 
         self.FoldersLabel = '-------Folders-------'
         self.FilesLabel = '-------Files-------'
-        self.parametersFile = parametersFile
+        self.settingsFile = settingsFile
         
-        with open(parametersFile, 'r') as stream :
-            par = yaml.safe_load(stream)
+        with open(settingsFile, 'r') as stream :
+            settings = yaml.safe_load(stream)
 
-        if os.path.isdir(par['folders']['data']) :
-            self.cwd = par['folders']['data']
+        if os.path.isdir(settings['folders']['data']) :
+            self.cwd = settings['folders']['data']
         else :
             self.cwd = str(Path(os.getcwd()))
 
@@ -167,9 +167,9 @@ class UI :
                 SelectFolder.observe(selecting, names='value')
                 SelectFolder.value = None
                 SelectFile.options = self.get_folder_contents(folder=address)[1]
-                par['folders']['data'] = str(address)
-                with open(parametersFile, "w") as outfile:
-                    yaml.dump(par,outfile,default_flow_style=False)
+                settings['folders']['data'] = str(address)
+                with open(settingsFile, "w") as outfile:
+                    yaml.dump(settings,outfile,default_flow_style=False)
 
         def newaddress(value):
             go_to_address(folderField.value)
